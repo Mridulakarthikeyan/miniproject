@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Digital Complaint System – Submit, track and manage complaints with role-based access for users, staff and admins.">
+    <title>Digital Complaint System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ── Auth Page ─────────────────────────────────────────────────────── -->
+    <div id="authPage" class="auth-container">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <div class="logo-icon">📋</div>
+                <h1>Digital Complaint System</h1>
+                <p>Manage and resolve complaints efficiently</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button id="loginTab"    class="auth-tab-btn active">Login</button>
+                <button id="registerTab" class="auth-tab-btn">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form active">
+                <div class="input-group">
+                    <span class="input-icon">✉️</span>
+                    <input type="email" id="loginEmail" placeholder="Email address" required>
+                </div>
+                <div class="input-group">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="auth-form">
+                <div class="input-group">
+                    <span class="input-icon">👤</span>
+                    <input type="text"     id="regName"     placeholder="Full Name"     required>
+                </div>
+                <div class="input-group">
+                    <span class="input-icon">✉️</span>
+                    <input type="email"    id="regEmail"    placeholder="Email address" required>
+                </div>
+                <div class="input-group">
+                    <span class="input-icon">📱</span>
+                    <input type="tel"      id="regPhone"    placeholder="Phone Number"  required>
+                </div>
+                <div class="input-group">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="regPassword" placeholder="Password"      required>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+
+            <div id="authToast" class="auth-toast"></div>
+        </div>
+    </div>
+
+    <!-- ── Dashboard Page ────────────────────────────────────────────────── -->
+    <div id="dashboardPage" class="dashboard-container" style="display:none;">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">📋</div>
+                <h2>Complaint System</h2>
+                <p id="userDisplay"></p>
+                <span id="roleBadge" class="role-badge"></span>
+            </div>
+            <ul id="sidebarMenu" class="sidebar-menu"></ul>
+            <button id="logoutBtn" class="btn btn-danger logout-btn">🚪 Logout</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- Toast Notification -->
+            <div id="toast" class="toast"></div>
+
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="section active">
+                <div class="section-header">
+                    <h2>Dashboard</h2>
+                    <p>Overview of complaint statistics</p>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card" data-color="blue">
+                        <div class="stat-icon">📁</div>
+                        <div class="stat-info">
+                            <h3>Total Complaints</h3>
+                            <p id="totalComplaintsCount">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" data-color="yellow">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <h3>Pending</h3>
+                            <p id="pendingComplaintsCount">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" data-color="orange">
+                        <div class="stat-icon">🔄</div>
+                        <div class="stat-info">
+                            <h3>In Progress</h3>
+                            <p id="inProgressComplaintsCount">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" data-color="green">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-info">
+                            <h3>Resolved</h3>
+                            <p id="resolvedComplaintsCount">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User/Staff quick stats -->
+                <div id="userDashboard">
+                    <div class="quick-actions">
+                        <h3>Quick Actions</h3>
+                    </div>
+                </div>
+
+                <!-- Admin analytics -->
+                <div id="adminDashboard" style="display:none;">
+                    <div class="section-divider">
+                        <h3>Admin Analytics</h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card" data-color="purple">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-info">
+                                <h3>Total Users</h3>
+                                <p id="adminTotalUsers">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-color="blue">
+                            <div class="stat-icon">📋</div>
+                            <div class="stat-info">
+                                <h3>All Complaints</h3>
+                                <p id="adminTotalComplaints">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-color="green">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-info">
+                                <h3>Resolved</h3>
+                                <p id="adminResolvedComplaints">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-color="yellow">
+                            <div class="stat-icon">⏳</div>
+                            <div class="stat-info">
+                                <h3>Pending</h3>
+                                <p id="adminPendingComplaints">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>📊 By Category</h3>
+                            <ul id="categoryChart"></ul>
+                        </div>
+                        <div class="chart-card">
+                            <h3>🔥 By Priority</h3>
+                            <ul id="priorityChart"></ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- My Complaints Section (User) -->
+            <section id="complaintsSection" class="section">
+                <div class="section-header">
+                    <h2>My Complaints</h2>
+                    <p>Track all complaints you have submitted</p>
+                </div>
+                <div class="filter-bar">
+                    <input  type="text" id="searchInput"    placeholder="🔍 Search by title or description…">
+                    <select id="statusFilter">
+                        <option value="">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
+                        <option value="Rejected">Rejected</option>
+                    </select>
+                </div>
+                <div id="complaintsList" class="complaints-list"></div>
+            </section>
+
+            <!-- Assigned Complaints Section (Staff) -->
+            <section id="staffSection" class="section">
+                <div class="section-header">
+                    <h2>Assigned Complaints</h2>
+                    <p>Complaints assigned to you for resolution</p>
+                </div>
+                <!-- NOTE: IDs are unique — staff uses searchInputStaff / statusFilterStaff -->
+                <div class="filter-bar">
+                    <input  type="text" id="searchInputStaff"    placeholder="🔍 Search by title or description…">
+                    <select id="statusFilterStaff">
+                        <option value="">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
+                        <option value="Rejected">Rejected</option>
+                    </select>
+                </div>
+                <div id="staffComplaints" class="complaints-list"></div>
+            </section>
+
+            <!-- Submit Complaint Section -->
+            <section id="submitSection" class="section">
+                <div class="section-header">
+                    <h2>Submit New Complaint</h2>
+                    <p>Fill in the details below to raise a complaint</p>
+                </div>
+                <form id="complaintForm" class="form-container">
+                    <div class="form-group">
+                        <label for="complaintTitle">Title</label>
+                        <input type="text" id="complaintTitle" placeholder="Brief title of your complaint" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="complaintDesc">Description</label>
+                        <textarea id="complaintDesc" placeholder="Provide a detailed description of your complaint…" required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="complaintCategory">Category</label>
+                            <select id="complaintCategory" required>
+                                <option value="">Select Category</option>
+                                <option value="Infrastructure">Infrastructure</option>
+                                <option value="Service">Service</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Security">Security</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="complaintPriority">Priority</label>
+                            <select id="complaintPriority" required>
+                                <option value="">Select Priority</option>
+                                <option value="Low">🟢 Low</option>
+                                <option value="Medium">🟡 Medium</option>
+                                <option value="High">🟠 High</option>
+                                <option value="Urgent">🔴 Urgent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Complaint</button>
+                </form>
+            </section>
+
+            <!-- Admin Section -->
+            <section id="adminSection" class="section">
+                <div class="section-header">
+                    <h2>Admin Panel</h2>
+                    <p>Manage users, complaints and staff accounts</p>
+                </div>
+
+                <div class="admin-tabs">
+                    <button class="admin-tab-btn active" data-tab="users">👥 Users</button>
+                    <button class="admin-tab-btn"        data-tab="complaints">📋 All Complaints</button>
+                    <button class="admin-tab-btn"        data-tab="staff">➕ Create Staff</button>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="usersTab" class="admin-tab active">
+                    <h3>All Registered Users</h3>
+                    <div class="table-wrapper">
+                        <table id="usersTable" class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Role</th>
+                                    <th>Joined</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Complaints Tab -->
+                <div id="complaintsTab" class="admin-tab">
+                    <h3>All System Complaints</h3>
+                    <div class="table-wrapper">
+                        <table id="adminComplaintsTable" class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Submitted By</th>
+                                    <th>Category</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Create Staff Tab -->
+                <div id="staffTab" class="admin-tab">
+                    <h3>Create Staff Account</h3>
+                    <form id="createStaffForm" class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="staffName">Full Name</label>
+                                <input type="text"     id="staffName"     placeholder="Staff Full Name"  required>
+                            </div>
+                            <div class="form-group">
+                                <label for="staffEmail">Email</label>
+                                <input type="email"    id="staffEmail"    placeholder="Staff Email"      required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="staffPhone">Phone</label>
+                                <input type="tel"      id="staffPhone"    placeholder="Phone Number"     required>
+                            </div>
+                            <div class="form-group">
+                                <label for="staffPassword">Password</label>
+                                <input type="password" id="staffPassword" placeholder="Set Password"     required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Staff Account</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Complaint Detail Section -->
+            <section id="detailSection" class="section">
+                <div class="detail-header">
+                    <button id="backBtn" class="btn btn-secondary">← Back</button>
+                    <h2>Complaint Details</h2>
+                </div>
+                <div id="complaintDetail"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

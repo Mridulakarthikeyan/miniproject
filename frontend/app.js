@@ -1,578 +1,468 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const API = 'http://localhost:5000/api';
 let currentUser = null;
-let currentComplaintsFiltered = [];
+let allComplaints = [];
 
-// Auth Functions
-function showAuthPage() {
-    document.getElementById('authPage').style.display = 'block';
-    document.getElementById('dashboardPage').style.display = 'none';
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3500);
 }
 
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('token'); }
+
+async function apiFetch(url, opts = {}) {
+    const token = getToken();
+    opts.headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...opts.headers };
+    const res = await fetch(API + url, opts);
+    if (res.status === 401) { logout(); return null; }
+    return res;
+}
+
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    currentUser = null;
+    location.reload();
+}
+
+// ── Page visibility ───────────────────────────────────────────────────────────
+function showAuthPage() {
+    document.getElementById('authPage').style.display = 'flex';
+    document.getElementById('dashboardPage').style.display = 'none';
+}
 function showDashboard() {
     document.getElementById('authPage').style.display = 'none';
-    document.getElementById('dashboardPage').style.display = 'block';
+    document.getElementById('dashboardPage').style.display = 'flex';
     loadDashboard();
 }
 
-// Tab switching
+// ── Auth tabs ─────────────────────────────────────────────────────────────────
 document.getElementById('loginTab').addEventListener('click', () => {
     document.getElementById('loginForm').classList.add('active');
     document.getElementById('registerForm').classList.remove('active');
     document.getElementById('loginTab').classList.add('active');
     document.getElementById('registerTab').classList.remove('active');
 });
-
 document.getElementById('registerTab').addEventListener('click', () => {
-    document.getElementById('loginForm').classList.remove('active');
     document.getElementById('registerForm').classList.add('active');
-    document.getElementById('loginTab').classList.remove('active');
+    document.getElementById('loginForm').classList.remove('active');
     document.getElementById('registerTab').classList.add('active');
+    document.getElementById('loginTab').classList.remove('active');
 });
 
-// Login
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
+function showAuthToast(msg, type) {
+    const el = document.getElementById('authToast');
+    el.textContent = msg;
+    el.className = `auth-toast ${type}`;
+    setTimeout(() => { el.className = 'auth-toast'; }, 4000);
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+document.getElementById('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            localStorage.setItem('token', data.token);
-            currentUser = data.user;
-            localStorage.setItem('user', JSON.stringify(data.user));
-            setupSidebar();
-            showDashboard();
-        } else {
-            alert(data.error || 'Login failed');
-        }
-    } catch (err) {
-        alert('Error: ' + err.message);
+    const res = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+            email:    document.getElementById('loginEmail').value,
+            password: document.getElementById('loginPassword').value
+        })
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (res.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        currentUser = data.user;
+        setupSidebar();
+        showDashboard();
+    } else {
+        showAuthToast(data.error || 'Login failed', 'error');
     }
 });
 
-// Register
-document.getElementById('registerForm').addEventListener('submit', async (e) => {
+// ── Register ──────────────────────────────────────────────────────────────────
+document.getElementById('registerForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const name = document.getElementById('regName').value;
-    const email = document.getElementById('regEmail').value;
-    const password = document.getElementById('regPassword').value;
-    const phone = document.getElementById('regPhone').value;
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, phone })
-        });
-
-        if (response.ok) {
-            alert('Registration successful! Please login.');
-            document.getElementById('registerForm').reset();
-            document.getElementById('loginTab').click();
-        } else {
-            const data = await response.json();
-            alert(data.error || 'Registration failed');
-        }
-    } catch (err) {
-        alert('Error: ' + err.message);
+    const res = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+            name:     document.getElementById('regName').value,
+            email:    document.getElementById('regEmail').value,
+            phone:    document.getElementById('regPhone').value,
+            password: document.getElementById('regPassword').value
+        })
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (res.ok) {
+        showAuthToast('Registration successful! Please login.', 'success');
+        document.getElementById('registerForm').reset();
+        document.getElementById('loginTab').click();
+    } else {
+        showAuthToast(data.error || 'Registration failed', 'error');
     }
 });
 
-// Logout
-document.getElementById('logoutBtn').addEventListener('click', () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    currentUser = null;
-    showAuthPage();
-    location.reload();
-});
+// ── Logout ────────────────────────────────────────────────────────────────────
+document.getElementById('logoutBtn').addEventListener('click', logout);
 
-// Setup Sidebar based on role
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 function setupSidebar() {
-    document.getElementById('userDisplay').textContent = `Welcome, ${currentUser.name}!`;
-    const sidebarMenu = document.getElementById('sidebarMenu');
-    
-    sidebarMenu.innerHTML = '';
-    
-    const items = [
-        { page: 'dashboard', label: 'Dashboard' },
-        { page: 'complaints', label: 'My Complaints' },
+    document.getElementById('userDisplay').textContent = currentUser.name;
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = currentUser.role.toUpperCase();
+    badge.className = `role-badge ${currentUser.role}`;
+
+    const menu = [
+        { page: 'dashboard',   label: '🏠 Dashboard' },
+        { page: 'complaints',  label: currentUser.role === 'staff' ? '📋 Assigned' : '📋 My Complaints' }
     ];
+    if (currentUser.role === 'user')  menu.push({ page: 'submit', label: '➕ Submit Complaint' });
+    if (currentUser.role === 'admin') menu.push({ page: 'admin',  label: '⚙️ Admin Panel' });
 
-    if (currentUser.role === 'user') {
-        items.push({ page: 'submit', label: 'Submit Complaint' });
-    } else if (currentUser.role === 'staff') {
-        items[1].label = 'Assigned Complaints';
-    } else if (currentUser.role === 'admin') {
-        items.push({ page: 'admin', label: 'Manage System' });
-    }
-
-    items.forEach(item => {
+    const ul = document.getElementById('sidebarMenu');
+    ul.innerHTML = '';
+    menu.forEach(item => {
         const li = document.createElement('li');
-        const a = document.createElement('a');
+        const a  = document.createElement('a');
         a.href = '#';
         a.className = 'menu-item' + (item.page === 'dashboard' ? ' active' : '');
         a.textContent = item.label;
         a.dataset.page = item.page;
-        a.addEventListener('click', (e) => {
-            e.preventDefault();
-            switchPage(item.page);
-        });
+        a.addEventListener('click', e => { e.preventDefault(); switchPage(item.page); });
         li.appendChild(a);
-        sidebarMenu.appendChild(li);
+        ul.appendChild(li);
     });
 }
 
-// Page switching
+// ── Page switching ────────────────────────────────────────────────────────────
 function switchPage(page) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-    
-    const pageMap = {
-        'dashboard': 'dashboardSection',
-        'complaints': currentUser.role === 'staff' ? 'staffSection' : 'complaintsSection',
-        'submit': 'submitSection',
-        'admin': 'adminSection'
+
+    const map = {
+        dashboard:  'dashboardSection',
+        complaints: currentUser.role === 'staff' ? 'staffSection' : 'complaintsSection',
+        submit:     'submitSection',
+        admin:      'adminSection'
     };
+    const sec = document.getElementById(map[page]);
+    if (sec) sec.classList.add('active');
 
-    const sectionId = pageMap[page];
-    if (sectionId) {
-        document.getElementById(sectionId).classList.add('active');
-    }
+    const link = document.querySelector(`[data-page="${page}"]`);
+    if (link) link.classList.add('active');
 
-    document.querySelector(`[data-page="${page}"]`).classList.add('active');
-
+    if (page === 'dashboard')  loadDashboard();
     if (page === 'complaints') loadComplaints();
-    else if (page === 'dashboard') loadDashboard();
-    else if (page === 'admin') loadAdminData();
+    if (page === 'admin')      loadAdminData();
 }
 
-// Load Dashboard
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-    if (currentUser.role === 'admin') {
-        loadAdminDashboard();
-    } else if (currentUser.role === 'staff') {
-        loadStaffDashboard();
-    } else {
-        loadUserDashboard();
-    }
-}
-
-async function loadUserDashboard() {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/complaints/my-complaints`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const complaints = await response.json();
-        
-        document.getElementById('totalComplaintsCount').textContent = complaints.length;
-        document.getElementById('resolvedComplaintsCount').textContent = complaints.filter(c => c.status === 'Resolved').length;
-        document.getElementById('pendingComplaintsCount').textContent = complaints.filter(c => c.status === 'Pending').length;
-        document.getElementById('inProgressComplaintsCount').textContent = complaints.filter(c => c.status === 'In Progress').length;
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-async function loadStaffDashboard() {
-    await loadUserDashboard();
+    if (currentUser.role === 'admin') return loadAdminDashboard();
+    // user & staff — load own complaints for counts
+    const res = await apiFetch('/complaints/my-complaints');
+    if (!res || !res.ok) return;
+    const complaints = await res.json();
+    document.getElementById('totalComplaintsCount').textContent    = complaints.length;
+    document.getElementById('pendingComplaintsCount').textContent   = complaints.filter(c => c.status === 'Pending').length;
+    document.getElementById('inProgressComplaintsCount').textContent = complaints.filter(c => c.status === 'In Progress').length;
+    document.getElementById('resolvedComplaintsCount').textContent  = complaints.filter(c => c.status === 'Resolved').length;
 }
 
 async function loadAdminDashboard() {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/admin/analytics`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+    const res = await apiFetch('/admin/analytics');
+    if (!res || !res.ok) return;
+    const d = await res.json();
 
-        const data = await response.json();
-        
-        document.getElementById('adminDashboard').style.display = 'block';
-        document.getElementById('userDashboard').style.display = 'none';
-        
-        document.getElementById('adminTotalComplaints').textContent = data.totalComplaints;
-        document.getElementById('adminResolvedComplaints').textContent = data.resolvedComplaints;
-        document.getElementById('adminPendingComplaints').textContent = data.pendingComplaints;
-        document.getElementById('adminTotalUsers').textContent = data.totalUsers;
+    document.getElementById('adminDashboard').style.display  = 'block';
+    document.getElementById('userDashboard').style.display   = 'none';
 
-        const categoryChart = document.getElementById('categoryChart');
-        categoryChart.innerHTML = '';
-        data.byCategory.forEach(cat => {
-            const li = document.createElement('li');
-            li.innerHTML = `<strong>${cat.category}</strong>: ${cat.count} complaints`;
-            categoryChart.appendChild(li);
-        });
+    document.getElementById('totalComplaintsCount').textContent    = d.totalComplaints;
+    document.getElementById('pendingComplaintsCount').textContent   = d.pendingComplaints;
+    document.getElementById('inProgressComplaintsCount').textContent = d.inProgressComplaints;
+    document.getElementById('resolvedComplaintsCount').textContent  = d.resolvedComplaints;
+    document.getElementById('adminTotalUsers').textContent          = d.totalUsers;
+    document.getElementById('adminTotalComplaints').textContent     = d.totalComplaints;
+    document.getElementById('adminResolvedComplaints').textContent  = d.resolvedComplaints;
+    document.getElementById('adminPendingComplaints').textContent   = d.pendingComplaints;
 
-        const priorityChart = document.getElementById('priorityChart');
-        priorityChart.innerHTML = '';
-        data.byPriority.forEach(pri => {
-            const li = document.createElement('li');
-            li.innerHTML = `<strong>${pri.priority}</strong>: ${pri.count} complaints`;
-            priorityChart.appendChild(li);
-        });
-    } catch (err) {
-        console.error(err);
-    }
+    const catList = document.getElementById('categoryChart');
+    catList.innerHTML = d.byCategory.map(c =>
+        `<li><strong>${c.category}</strong> <span>${c.count}</span></li>`).join('');
+
+    const priList = document.getElementById('priorityChart');
+    priList.innerHTML = d.byPriority.map(p =>
+        `<li><strong>${p.priority}</strong> <span>${p.count}</span></li>`).join('');
 }
 
-// Load Complaints
+// ── Complaints List ───────────────────────────────────────────────────────────
 async function loadComplaints() {
-    try {
-        const token = localStorage.getItem('token');
-        const endpoint = currentUser.role === 'staff' ? 'my-complaints' : 'my-complaints';
-        
-        const response = await fetch(`${API_BASE_URL}/complaints/${endpoint}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+    const res = await apiFetch('/complaints/my-complaints');
+    if (!res || !res.ok) return;
+    allComplaints = await res.json();
+    renderComplaints(allComplaints);
+}
 
-        currentComplaintsFiltered = await response.json();
-        displayComplaints(currentComplaintsFiltered);
-    } catch (err) {
-        console.error(err);
+function renderComplaints(list) {
+    const containerId = currentUser.role === 'staff' ? 'staffComplaints' : 'complaintsList';
+    const container   = document.getElementById(containerId);
+    if (!container) return;
+
+    if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state"><span class="empty-icon">📭</span>No complaints found.</div>`;
+        return;
     }
+
+    container.innerHTML = list.map(c => {
+        const shortDesc  = c.description.length > 100 ? c.description.substring(0, 100) + '…' : c.description;
+        const statusClass = 'status-' + c.status.toLowerCase().replace(/\s+/g, '-');
+        const date        = new Date(c.created_at).toLocaleDateString();
+        return `
+        <div class="complaint-card" onclick="showDetail(${c.id})">
+            <h3>${escapeHtml(c.title)}</h3>
+            <p><strong>Category:</strong> ${c.category} &nbsp;|&nbsp; <strong>Priority:</strong>
+               <span class="priority-${c.priority.toLowerCase()}">${c.priority}</span></p>
+            <p class="card-desc">${escapeHtml(shortDesc)}</p>
+            <div class="card-footer">
+                <span class="status-badge ${statusClass}">${c.status}</span>
+                <span class="card-date">${date}</span>
+            </div>
+        </div>`;
+    }).join('');
 }
 
-function displayComplaints(complaints) {
-    const list = document.getElementById('complaintsSection').id === 'complaintsSection' 
-        ? document.getElementById('complaintsList') 
-        : document.getElementById('staffComplaints');
-    
-    list.innerHTML = '';
-    
-    complaints.forEach(complaint => {
-        const card = document.createElement('div');
-        card.className = 'complaint-card';
-        card.innerHTML = `
-            <h3>${complaint.title}</h3>
-            <p><strong>Category:</strong> ${complaint.category}</p>
-            <p><strong>Priority:</strong> ${complaint.priority}</p>
-            <p>${complaint.description.substring(0, 100)}...</p>
-            <span class="status-badge status-${complaint.status.toLowerCase().replace(' ', '-')}">${complaint.status}</span>
-        `;
-        card.addEventListener('click', () => showComplaintDetail(complaint.id));
-        list.appendChild(card);
-    });
-}
+// ── Complaint Detail ──────────────────────────────────────────────────────────
+async function showDetail(id) {
+    const res = await apiFetch(`/complaints/${id}`);
+    if (!res || !res.ok) { showToast('Could not load complaint', 'error'); return; }
+    const { complaint: c, remarks } = await res.json();
 
-// Show Complaint Detail
-async function showComplaintDetail(id) {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/complaints/${id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+    const statusClass = 'status-' + c.status.toLowerCase().replace(/\s+/g, '-');
 
-        const { complaint, remarks } = await response.json();
-        
-        const detailSection = document.getElementById('detailSection');
-        const detail = document.getElementById('complaintDetail');
-        
-        let html = `
-            <div class="complaint-detail-card">
-                <h3>${complaint.title}</h3>
-                <div class="detail-row">
-                    <span class="detail-label">Category:</span>
-                    <span>${complaint.category}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Priority:</span>
-                    <span>${complaint.priority}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Status:</span>
-                    <span class="status-badge status-${complaint.status.toLowerCase().replace(' ', '-')}">${complaint.status}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Description:</span>
-                    <span>${complaint.description}</span>
-                </div>
-        `;
+    let html = `
+    <div class="complaint-detail-card">
+        <h3>${escapeHtml(c.title)}</h3>
+        <div class="detail-row"><span class="detail-label">Submitted By</span><span>${escapeHtml(c.user_name)}</span></div>
+        <div class="detail-row"><span class="detail-label">Category</span><span>${c.category}</span></div>
+        <div class="detail-row"><span class="detail-label">Priority</span>
+            <span class="priority-${c.priority.toLowerCase()}">${c.priority}</span></div>
+        <div class="detail-row"><span class="detail-label">Status</span>
+            <span class="status-badge ${statusClass}">${c.status}</span></div>
+        <div class="detail-row"><span class="detail-label">Date</span>
+            <span>${new Date(c.created_at).toLocaleString()}</span></div>
+        <div class="detail-row"><span class="detail-label">Description</span>
+            <span>${escapeHtml(c.description)}</span></div>`;
 
-        if (currentUser.role !== 'user') {
+    if (currentUser.role !== 'user') {
+        html += `
+        <div class="status-controls">
+            <select id="statusUpdate">
+                ${['Pending','In Progress','Resolved','Rejected'].map(s =>
+                    `<option value="${s}" ${c.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <button class="btn btn-primary" onclick="updateStatus(${id})">Update Status</button>
+        </div>`;
+    }
+    html += `</div>`;
+
+    // Remarks
+    const canRemark = currentUser.role !== 'user';
+    if (remarks.length > 0 || canRemark) {
+        html += `<div class="remarks-section"><h3>💬 Remarks</h3>`;
+        if (remarks.length === 0) {
+            html += `<p style="color:var(--text-muted);font-size:14px;">No remarks yet.</p>`;
+        }
+        remarks.forEach(r => {
             html += `
-                <div class="detail-row" style="margin-top: 15px;">
-                    <select id="statusUpdate" style="padding: 8px; border: 2px solid #667eea; border-radius: 5px;">
-                        <option value="Pending" ${complaint.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                        <option value="In Progress" ${complaint.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                        <option value="Resolved" ${complaint.status === 'Resolved' ? 'selected' : ''}>Resolved</option>
-                        <option value="Rejected" ${complaint.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="updateStatus(${id})">Update Status</button>
-                </div>
-            `;
+            <div class="remark-item">
+                <p class="remark-author">👤 ${escapeHtml(r.staff_name)}</p>
+                <p class="remark-text">${escapeHtml(r.remark)}</p>
+                <p class="remark-time">${new Date(r.created_at).toLocaleString()}</p>
+            </div>`;
+        });
+        if (canRemark) {
+            html += `
+            <div class="add-remark-box">
+                <textarea id="newRemark" placeholder="Add a remark…"></textarea>
+                <button class="btn btn-primary" onclick="addRemark(${id})">Add Remark</button>
+            </div>`;
         }
-
         html += `</div>`;
-
-        if (remarks.length > 0 || currentUser.role !== 'user') {
-            html += `<div class="remarks-section"><h3>Remarks</h3>`;
-            
-            remarks.forEach(remark => {
-                html += `
-                    <div class="remark-item">
-                        <p><strong>By Staff:</strong> ${remark.user_id}</p>
-                        <p>${remark.remark}</p>
-                        <p style="font-size: 0.9em; color: #999;">${new Date(remark.created_at).toLocaleString()}</p>
-                    </div>
-                `;
-            });
-
-            if (currentUser.role !== 'user') {
-                html += `
-                    <textarea id="newRemark" placeholder="Add a remark..." style="width: 100%; padding: 10px; margin: 10px 0; border: 2px solid #e0e0e0; border-radius: 5px;"></textarea>
-                    <button class="btn btn-primary" onclick="addRemark(${id})">Add Remark</button>
-                `;
-            }
-            
-            html += `</div>`;
-        }
-
-        detail.innerHTML = html;
-        
-        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-        detailSection.classList.add('active');
-        
-        document.getElementById('backBtn').onclick = () => switchPage('complaints');
-    } catch (err) {
-        alert('Error loading complaint details');
     }
+
+    document.getElementById('complaintDetail').innerHTML = html;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('detailSection').classList.add('active');
+    document.getElementById('backBtn').onclick = () => switchPage('complaints');
 }
 
 async function updateStatus(id) {
     const status = document.getElementById('statusUpdate').value;
-    const token = localStorage.getItem('token');
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/complaints/${id}/status`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status })
-        });
-
-        if (response.ok) {
-            alert('Status updated successfully');
-            showComplaintDetail(id);
-        }
-    } catch (err) {
-        alert('Error updating status');
-    }
+    const res = await apiFetch(`/complaints/${id}/status`, {
+        method: 'PUT', body: JSON.stringify({ status })
+    });
+    if (res && res.ok) { showToast('Status updated!', 'success'); showDetail(id); }
+    else showToast('Failed to update status', 'error');
 }
 
 async function addRemark(id) {
-    const remark = document.getElementById('newRemark').value;
-    const token = localStorage.getItem('token');
-    
-    if (!remark.trim()) {
-        alert('Please enter a remark');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/complaints/${id}/remarks`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ remark })
-        });
-
-        if (response.ok) {
-            alert('Remark added successfully');
-            showComplaintDetail(id);
-        }
-    } catch (err) {
-        alert('Error adding remark');
-    }
+    const remark = document.getElementById('newRemark').value.trim();
+    if (!remark) { showToast('Please enter a remark', 'error'); return; }
+    const res = await apiFetch(`/complaints/${id}/remarks`, {
+        method: 'POST', body: JSON.stringify({ remark })
+    });
+    if (res && res.ok) { showToast('Remark added!', 'success'); showDetail(id); }
+    else showToast('Failed to add remark', 'error');
 }
 
-// Submit Complaint
-document.getElementById('complaintForm').addEventListener('submit', async (e) => {
+// ── Submit Complaint ──────────────────────────────────────────────────────────
+document.getElementById('complaintForm').addEventListener('submit', async e => {
     e.preventDefault();
-    
-    const title = document.getElementById('complaintTitle').value;
-    const description = document.getElementById('complaintDesc').value;
-    const category = document.getElementById('complaintCategory').value;
-    const priority = document.getElementById('complaintPriority').value;
-
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/complaints/submit`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ title, description, category, priority })
-        });
-
-        if (response.ok) {
-            alert('Complaint submitted successfully');
-            document.getElementById('complaintForm').reset();
-            switchPage('complaints');
-        }
-    } catch (err) {
-        alert('Error submitting complaint');
+    const res = await apiFetch('/complaints/submit', {
+        method: 'POST',
+        body: JSON.stringify({
+            title:       document.getElementById('complaintTitle').value,
+            description: document.getElementById('complaintDesc').value,
+            category:    document.getElementById('complaintCategory').value,
+            priority:    document.getElementById('complaintPriority').value
+        })
+    });
+    if (res && res.ok) {
+        showToast('Complaint submitted successfully!', 'success');
+        document.getElementById('complaintForm').reset();
+        switchPage('complaints');
+    } else {
+        const d = res ? await res.json() : {};
+        showToast(d.error || 'Failed to submit complaint', 'error');
     }
 });
 
-// Admin Functions
-async function loadAdminData() {
-    await loadAdminUsers();
-    await loadAdminComplaints();
+// ── Admin Data ────────────────────────────────────────────────────────────────
+let adminTabsInit = false;
 
-    document.querySelectorAll('.admin-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-            
-            btn.classList.add('active');
-            document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+async function loadAdminData() {
+    await Promise.all([loadAdminUsers(), loadAdminComplaints()]);
+    if (!adminTabsInit) {
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+            });
         });
-    });
+        adminTabsInit = true;
+    }
 }
 
 async function loadAdminUsers() {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/admin/users`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const users = await response.json();
-        const tbody = document.querySelector('#usersTable tbody');
-        tbody.innerHTML = '';
-
-        users.forEach(user => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${user.name}</td>
-                <td>${user.email}</td>
-                <td>${user.phone}</td>
-                <td>${user.role}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error(err);
-    }
+    const res = await apiFetch('/admin/users');
+    if (!res || !res.ok) return;
+    const users = await res.json();
+    const tbody = document.querySelector('#usersTable tbody');
+    tbody.innerHTML = users.map((u, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(u.name)}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td>${u.phone || '—'}</td>
+            <td><span class="status-badge role-badge ${u.role}">${u.role.toUpperCase()}</span></td>
+            <td>${new Date(u.created_at).toLocaleDateString()}</td>
+        </tr>`).join('');
 }
 
 async function loadAdminComplaints() {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/complaints/my-complaints`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const complaints = await response.json();
-        const tbody = document.querySelector('#adminComplaintsTable tbody');
-        tbody.innerHTML = '';
-
-        complaints.forEach(complaint => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${complaint.id}</td>
-                <td>${complaint.title}</td>
-                <td>${complaint.category}</td>
-                <td>${complaint.priority}</td>
-                <td>${complaint.status}</td>
-                <td>
-                    <button class="btn btn-danger" onclick="deleteComplaint(${complaint.id})">Delete</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error(err);
-    }
+    // FIX: was incorrectly calling /complaints/my-complaints
+    const res = await apiFetch('/admin/complaints');
+    if (!res || !res.ok) return;
+    const complaints = await res.json();
+    const tbody = document.querySelector('#adminComplaintsTable tbody');
+    tbody.innerHTML = complaints.map(c => {
+        const sc = 'status-' + c.status.toLowerCase().replace(/\s+/g, '-');
+        return `<tr>
+            <td>#${c.id}</td>
+            <td>${escapeHtml(c.title)}</td>
+            <td>${escapeHtml(c.user_name)}</td>
+            <td>${c.category}</td>
+            <td class="priority-${c.priority.toLowerCase()}">${c.priority}</td>
+            <td><span class="status-badge ${sc}">${c.status}</span></td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteComplaint(${c.id})">Delete</button></td>
+        </tr>`;
+    }).join('');
 }
 
 async function deleteComplaint(id) {
-    if (!confirm('Are you sure?')) return;
-
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/admin/complaints/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-            alert('Complaint deleted successfully');
-            loadAdminComplaints();
-        }
-    } catch (err) {
-        alert('Error deleting complaint');
-    }
+    if (!confirm('Delete this complaint permanently?')) return;
+    const res = await apiFetch(`/admin/complaints/${id}`, { method: 'DELETE' });
+    if (res && res.ok) { showToast('Complaint deleted', 'success'); loadAdminComplaints(); }
+    else showToast('Failed to delete complaint', 'error');
 }
 
-// Create Staff
-document.getElementById('createStaffForm').addEventListener('submit', async (e) => {
+// ── Create Staff ──────────────────────────────────────────────────────────────
+document.getElementById('createStaffForm').addEventListener('submit', async e => {
     e.preventDefault();
-    
-    const name = document.getElementById('staffName').value;
-    const email = document.getElementById('staffEmail').value;
-    const password = document.getElementById('staffPassword').value;
-    const phone = document.getElementById('staffPhone').value;
-
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/admin/create-staff`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ name, email, password, phone })
-        });
-
-        if (response.ok) {
-            alert('Staff user created successfully');
-            document.getElementById('createStaffForm').reset();
-            loadAdminUsers();
-        }
-    } catch (err) {
-        alert('Error creating staff user');
+    const res = await apiFetch('/admin/create-staff', {
+        method: 'POST',
+        body: JSON.stringify({
+            name:     document.getElementById('staffName').value,
+            email:    document.getElementById('staffEmail').value,
+            phone:    document.getElementById('staffPhone').value,
+            password: document.getElementById('staffPassword').value
+        })
+    });
+    if (res && res.ok) {
+        showToast('Staff account created!', 'success');
+        document.getElementById('createStaffForm').reset();
+        loadAdminUsers();
+    } else {
+        const d = res ? await res.json() : {};
+        showToast(d.error || 'Failed to create staff', 'error');
     }
 });
 
-// Search and Filter
-document.getElementById('searchInput').addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    const filtered = currentComplaintsFiltered.filter(complaint =>
-        complaint.title.toLowerCase().includes(searchTerm) ||
-        complaint.description.toLowerCase().includes(searchTerm)
-    );
-    displayComplaints(filtered);
-});
+// ── Search & Filter (combined) ────────────────────────────────────────────────
+function getFilteredComplaints() {
+    const isStaff   = currentUser.role === 'staff';
+    const searchId  = isStaff ? 'searchInputStaff'  : 'searchInput';
+    const filterId  = isStaff ? 'statusFilterStaff' : 'statusFilter';
+    const term      = (document.getElementById(searchId)?.value  || '').toLowerCase();
+    const status    = (document.getElementById(filterId)?.value   || '');
+    return allComplaints.filter(c => {
+        const matchText   = !term   || c.title.toLowerCase().includes(term) || c.description.toLowerCase().includes(term);
+        const matchStatus = !status || c.status === status;
+        return matchText && matchStatus;
+    });
+}
 
-document.getElementById('statusFilter').addEventListener('change', (e) => {
-    const status = e.target.value;
-    const filtered = status 
-        ? currentComplaintsFiltered.filter(complaint => complaint.status === status)
-        : currentComplaintsFiltered;
-    displayComplaints(filtered);
-});
+function bindFilters(searchId, filterId) {
+    const s = document.getElementById(searchId);
+    const f = document.getElementById(filterId);
+    if (s) s.addEventListener('input',  () => renderComplaints(getFilteredComplaints()));
+    if (f) f.addEventListener('change', () => renderComplaints(getFilteredComplaints()));
+}
 
-// Initialize
+bindFilters('searchInput',      'statusFilter');
+bindFilters('searchInputStaff', 'statusFilterStaff');
+
+// ── XSS helper ────────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-    const token = localStorage.getItem('token');
+    const token   = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
-    
     if (token && userStr) {
         currentUser = JSON.parse(userStr);
         setupSidebar();
